@@ -13,6 +13,7 @@ import (
 
 	"mailingAPI/cmd/config"
 	"mailingAPI/cmd/loggers"
+	"mailingAPI/external"
 	"mailingAPI/internal/handlers"
 	"mailingAPI/internal/storage/repositories"
 	"mailingAPI/pkg/postgres"
@@ -57,8 +58,10 @@ func (a *ServerApp) Run() {
 		Addr:    a.cfg.Addr,
 		Handler: a.router,
 	}
-	done := make(chan os.Signal, 1)
-	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	//инициализация и запуск отправителя
+	deliver := external.NewDeliver(a.cfg, store, a.logger)
+	go deliver.Run()
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -68,6 +71,9 @@ func (a *ServerApp) Run() {
 	a.logger.LogInfo("server is listen:", a.cfg.Addr, "start server")
 
 	//gracefullshutdown
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
 	<-done
 
 	a.logger.LogInfo("", "", "server stopped")

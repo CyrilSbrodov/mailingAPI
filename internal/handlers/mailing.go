@@ -122,8 +122,7 @@ func (h *Handler) GetDetailStatistic() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		// TODO проверка полей юзера
-		mail, err := h.storage.GetOneMailingStat(&m)
+		mail, err := h.storage.GetOneMailingStatByID(&m)
 		if err != nil {
 			h.logger.LogErr(err, "")
 			w.WriteHeader(http.StatusInternalServerError)

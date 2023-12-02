@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -34,22 +35,29 @@ func createTable(ctx context.Context, client postgres.Client, logger *loggers.Lo
     		id SERIAL PRIMARY KEY,
     		phone_number VARCHAR(15) NOT NULL,
     		tag VARCHAR(50),
-    		code BIGINT NOT NULL
+    		code VARCHAR(50) NOT NULL,
+    		timezone VARCHAR(50),
+    		created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE TABLE if not exists mailing (
     		id SERIAL PRIMARY KEY,
-    		time_start TIMESTAMPTZ,
-    		time_end TIMESTAMPTZ,
+    		time_start TIMESTAMPTZ NOT NULL,
+    		time_end TIMESTAMPTZ NOT NULL,
     		code VARCHAR(50),
     		tag VARCHAR(50),
-    		content TEXT                         
+    		message TEXT,
+    		created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP                       
 		);
-		CREATE TABLE if not exists message (
-    		id BIGINT PRIMARY KEY generated always as identity,
-    		mail_id INT REFERENCES mailing(id),
-    		client_id INT REFERENCES client(id),
-    		status varchar(50),
-    		time_start TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP                       
+		CREATE TABLE if not exists messages (
+    		id SERIAL PRIMARY KEY,
+    		mail_id INT REFERENCES mailing(id) NOT NULL,
+    		client_id INT REFERENCES client(id) NOT NULL,
+    		status varchar(50) NOT NULL,
+    		send_time TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    		created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP                     
 		);`
 
 	_, err = tx.Exec(ctx, q)
@@ -100,43 +108,48 @@ func (p *PGStore) DeleteClient(c *models.Client) error {
 	return nil
 }
 func (p *PGStore) AddMailing(m *models.Mailing) error {
-	q := `INSERT INTO mailing (time_start, time_end, code, tag, content)
-    						VALUES ($1, $2, $3, $4, $5)`
-	if _, err := p.client.Exec(context.Background(), q, m.TimeStart, m.TimeEnd, m.Filter.MobileOperator, m.Filter.Tag, m.Messages); err != nil {
+	q := `INSERT INTO mailing (time_start, time_end, code, tag, message)
+    						VALUES ($1, $2, $3, $4, $5, $6)`
+	if _, err := p.client.Exec(context.Background(), q, m.TimeStart, m.TimeEnd, m.Filter.MobileOperator, m.Filter.Tag, m.Message); err != nil {
 		p.logger.LogErr(err, "Failure to insert object into table")
 		return err
 	}
 	return nil
 }
-func (p *PGStore) GetAllMailingStat() ([]models.Mailing, error) {
-	var m []models.Mailing
-	q := `SELECT id, time_start, time_end, code, tag, content FROM mailing`
-	rows, err := p.client.Query(context.Background(), q)
+func (p *PGStore) GetAllMailingStat() (models.AllStatistics, error) {
+	var stat models.AllStatistics
+	q := `SELECT m.id AS mailing_id, m.message,
+    COUNT(msg.id) AS total_messages,
+    SUM(CASE WHEN msg.status = 'ok' THEN 1 ELSE 0 END) AS sent_messages,
+    SUM(CASE WHEN msg.status = 'failed' THEN 1 ELSE 0 END) AS failed_messages
+	FROM mailing m
+    LEFT JOIN messages msg ON m.id = msg.mail_id
+	GROUP BY
+    m.id, m.message
+	ORDER BY
+    m.id;`
+	err := p.client.QueryRow(context.Background(), q).Scan(&stat.MailingID, &stat.Message, &stat.TotalMessages, &stat.SentMessages, &stat.FailedMessages)
 	if err != nil {
 		p.logger.LogErr(err, "Failure to insert object into table")
-		return nil, err
+		return stat, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var mail models.Mailing
-		err = rows.Scan(&mail.ID, &mail.TimeStart, &mail.TimeEnd, &mail.Filter.MobileOperator,
-			&mail.Filter.Tag, mail.Messages)
-		if err != nil {
-			p.logger.LogErr(err, "Failure to convert object from table")
-			return nil, err
-		}
-		m = append(m, mail)
-	}
-	return m, nil
+	return stat, nil
 }
-func (p *PGStore) GetOneMailingStat(m *models.Mailing) (models.Mailing, error) {
+func (p *PGStore) GetOneMailingStatByID(m *models.Mailing) (models.Mailing, error) {
+	//q := `SELECT m.id AS mail_id, c.id AS client_id, c.phone_number, msg.send_time, msg.status, m.message
+	//		FROM messages msg
+	//		JOIN mailing m ON msg.mail_id = m.id
+	//		JOIN client c ON msg.client_id = c.id
+	//		WHERE m.id = $1
+	//		ORDER BY mail_id;`
+
 	return *m, nil
 }
 func (p *PGStore) UpdateMailing(m *models.Mailing) error {
-	q := `UPDATE mailing SET time_start = $2, time_end = $3, code = $4, tag = $5, content = $6
+	q := `UPDATE mailing SET time_start = $2, time_end = $3, code = $4, tag = $5, message = $6
                WHERE id = $1`
 	if _, err := p.client.Exec(context.Background(), q, m.ID, m.TimeStart, m.TimeEnd, m.Filter.MobileOperator,
-		m.Filter.Tag, m.Messages); err != nil {
+		m.Filter.Tag, m.Message); err != nil {
 		p.logger.LogErr(err, "Failure to update object into table")
 		return err
 	}
@@ -151,16 +164,52 @@ func (p *PGStore) DeleteMailing(m *models.Mailing) error {
 	return nil
 }
 
-func (p *PGStore) ActiveProcessMailing() ([]models.Mailing, error) {
-	q := `SELECT id, time_start, time_end, code, tag, content FROM mailing`
-	q1 := `SELECT id, phone_number, code FROM client`
+func (p *PGStore) ActiveProcessMailing() (map[string][]models.ActiveMailing, error) {
+	activeMailing := make(map[string][]models.ActiveMailing)
+	q := `SELECT mailing.id, mailing.message, mailing.time_end, c.id AS client_id, c.phone_number
+				FROM mailing JOIN client c ON mailing.tag = c.tag AND mailing.code = c.code
+         		LEFT JOIN messages m ON mailing.id = m.mail_id AND c.id = m.client_id
+				WHERE now() AT TIME ZONE 'Europe/Moscow' BETWEEN mailing.time_start AND mailing.time_end
+  				AND (m.id IS NULL OR NOT c.id = m.client_id) 
+				AND NOT EXISTS (
+    							SELECT 1
+    							FROM messages msg
+    							WHERE msg.mail_id = mailing.id
+								);`
+	rows, err := p.client.Query(context.Background(), q)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			p.logger.LogErr(err, "There are no mailing lists")
+			return nil, err
+		}
+		p.logger.LogErr(err, "")
+		return nil, err
+	}
+	for rows.Next() {
+		var m models.ActiveMailing
+		if err = rows.Scan(&m.MailId, &m.Message, &m.TimeEnd, &m.Client.ID, &m.Client.PhoneNumber); err != nil {
+			p.logger.LogErr(err, "")
+			return nil, err
+		}
+		activeMailing[m.Message] = append(activeMailing[m.Message], m)
+	}
+	return activeMailing, nil
 }
 
-func (p *PGStore) UpdateStatus(m *models.Message) error {
-	q := `UPDATE message SET status = $2 WHERE client_id = $1`
-	if _, err := p.client.Exec(context.Background(), q, m.ID); err != nil {
-		p.logger.LogErr(err, "Failure to update object from table")
+func (p *PGStore) UpdateStatusMessage(am []models.ActiveMailing) error {
+	q := `INSERT INTO messages (mail_id, client_id, status, send_time) VALUES ($1, $2, $3, $4)`
+	tx, err := p.client.BeginTx(context.Background(), pgx.TxOptions{})
+	if err != nil {
+		p.logger.LogErr(err, "failed to begin transaction")
 		return err
 	}
-	return nil
+	defer tx.Rollback(context.Background())
+
+	for _, m := range am {
+		if _, err := p.client.Exec(context.Background(), q, m.MailId, m.Client.ID, m.Status, m.TimeSend); err != nil {
+			p.logger.LogErr(err, "Failure to insert object from table")
+			return err
+		}
+	}
+	return tx.Commit(context.Background())
 }

@@ -3,79 +3,120 @@ package external
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"mailingAPI/cmd/config"
+	"mailingAPI/cmd/loggers"
 	"mailingAPI/internal/storage"
 	"mailingAPI/internal/storage/models"
 )
 
-type Scheduler struct {
+const (
+	statusOk     = "ok"
+	statusFailed = "failed"
+)
+
+type Deliver struct {
 	store  storage.Storage
 	cfg    *config.ServerConfig
-	timer  *time.Timer
+	logger *loggers.Logger
 	ticker *time.Ticker
+	wg     *sync.WaitGroup
+	client *http.Client
 }
 
-func NewScheduler(cfg *config.ServerConfig, store storage.Storage) *Scheduler {
+func NewDeliver(cfg *config.ServerConfig, store storage.Storage, logger *loggers.Logger) *Deliver {
 	ticker := time.NewTicker(cfg.CheckInterval)
-	return &Scheduler{
+	wg := &sync.WaitGroup{}
+	client := &http.Client{}
+	return &Deliver{
 		store:  store,
 		cfg:    cfg,
+		logger: logger,
 		ticker: ticker,
+		wg:     wg,
+		client: client,
 	}
 }
 
-func (s *Scheduler) CheckNewMailing() error {
-	for range s.ticker.C {
-		clients, mailing, err := s.store.ActiveProcessMailing()
-		if err != nil {
-			return err
-		}
-		if len(mailing) == 0 {
+// Run запуск доставщика
+func (d *Deliver) Run() {
+	for range d.ticker.C {
+		clients, err := d.store.ActiveProcessMailing()
+		if len(clients) == 0 || err != nil && errors.Is(err, pgx.ErrNoRows) {
+			d.logger.LogInfo("deliver", "mailing", "there no active mailing")
 			continue
-		} else {
-			go func() {
-				if err := s.SendMessage(clients, mailing); err != nil {
-					//TODO error
-					return err
-				}
-			}()
+		}
+		for _, m := range clients {
+			go func(am []models.ActiveMailing) {
+				timer := time.NewTimer(am[0].TimeEnd.Sub(time.Now()))
+				d.SendMessage(am, timer)
+			}(m)
 		}
 	}
-	return nil
 }
 
 // SendMessage отправляет сообщение клиенту через внешний сервис
-func (s *Scheduler) SendMessage(client []models.Client, message []models.Mailing) error {
-	for _, m := range client {
-		//TODO add external addr to cfg
-		externalServiceURL := "https://probe.fbrq.cloud/send" // Замените на реальный URL вашего внешнего сервиса
+func (d *Deliver) SendMessage(am []models.ActiveMailing, timer *time.Timer) {
+	for i := 0; i < len(am); i++ {
+		select {
+		case <-timer.C:
+			timer.Stop()
+			break
+		default:
+			var dm models.DeliverMailing
+			var err error
 
-		// Создаем JSON-запрос
-		requestBody, err := json.Marshal(map[string]interface{}{
-			"phone_number": m.PhoneNumber,
-			"message":      message,
-		})
-		if err != nil {
-			return fmt.Errorf("ошибка при формировании JSON-запроса: %v", err)
+			dm.ID = am[i].MailId
+			dm.Phone, err = strconv.Atoi(am[i].Client.PhoneNumber)
+			if err != nil {
+				d.logger.LogErr(err, "failed to convert phone")
+				continue
+			}
+			dm.Text = am[i].Message
+
+			// Создаем JSON-запрос
+			requestBody, err := json.Marshal(dm)
+			if err != nil {
+				d.logger.LogErr(err, "failed to convert to JSON")
+				continue
+			}
+
+			// Отправляем HTTP-запрос
+			req, err := http.NewRequest("POST", d.cfg.ExternalAddr+strconv.Itoa(dm.ID), bytes.NewBuffer(requestBody))
+			if err != nil {
+				d.logger.LogErr(fmt.Errorf("ошибка при создании HTTP-запроса: %v", err), "")
+				continue
+			}
+			req.Header.Set("Authorization", "Bearer "+d.cfg.Token)
+			req.Header.Set("Content-Type", "application/json")
+
+			resp, err := d.client.Do(req)
+			if err != nil {
+				d.logger.LogErr(fmt.Errorf("ошибка при отправке HTTP-запроса: %v", err), "")
+				continue
+			}
+			// Обрабатываем ответ
+			if resp.StatusCode != http.StatusOK {
+				am[i].Status = statusFailed
+				d.logger.LogErr(fmt.Errorf("некорректный HTTP-статус от внешнего сервиса: %d", resp.StatusCode), "")
+			} else {
+				am[i].TimeSend = time.Now()
+				am[i].Status = statusOk
+			}
+
+			resp.Body.Close()
 		}
-
-		// Отправляем HTTP-запрос
-		resp, err := http.Post(externalServiceURL, "application/json", bytes.NewBuffer(requestBody))
-		if err != nil {
-			return fmt.Errorf("ошибка при отправке HTTP-запроса: %v", err)
-		}
-
-		// Обрабатываем ответ
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("некорректный HTTP-статус от внешнего сервиса: %d", resp.StatusCode)
-		}
-
-		resp.Body.Close()
-
 	}
-	return nil
+	if err := d.store.UpdateStatusMessage(am); err != nil {
+		d.logger.LogErr(err, "")
+		return
+	}
 }
