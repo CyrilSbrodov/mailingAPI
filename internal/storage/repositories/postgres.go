@@ -130,20 +130,44 @@ func (p *PGStore) GetAllMailingStat() (models.AllStatistics, error) {
     m.id;`
 	err := p.client.QueryRow(context.Background(), q).Scan(&stat.MailingID, &stat.Message, &stat.TotalMessages, &stat.SentMessages, &stat.FailedMessages)
 	if err != nil {
-		p.logger.LogErr(err, "Failure to insert object into table")
+		if errors.Is(err, pgx.ErrNoRows) {
+			p.logger.LogErr(err, "There no one success mailing")
+			return stat, nil
+		}
+		p.logger.LogErr(err, "Failure to select object from table")
 		return stat, err
 	}
 	return stat, nil
 }
-func (p *PGStore) GetOneMailingStatByID(m *models.Mailing) (models.Mailing, error) {
-	//q := `SELECT m.id AS mail_id, c.id AS client_id, c.phone_number, msg.send_time, msg.status, m.message
-	//		FROM messages msg
-	//		JOIN mailing m ON msg.mail_id = m.id
-	//		JOIN client c ON msg.client_id = c.id
-	//		WHERE m.id = $1
-	//		ORDER BY mail_id;`
+func (p *PGStore) GetOneMailingStatByID(m *models.Statistics) ([]models.Statistics, error) {
+	var stat []models.Statistics
+	q := `SELECT m.id AS mail_id, c.id AS client_id, c.phone_number, msg.send_time, msg.status, m.message
+			FROM messages msg
+			JOIN mailing m ON msg.mail_id = m.id
+			JOIN client c ON msg.client_id = c.id
+			WHERE m.id = $1
+			ORDER BY mail_id;`
+	rows, err := p.client.Query(context.Background(), q, m.MailingID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			p.logger.LogErr(err, "There no one success mailing")
+			return nil, err
+		}
+		p.logger.LogErr(err, "Failure to select object from table")
+		return nil, err
+	}
 
-	return *m, nil
+	for rows.Next() {
+		var s models.Statistics
+		err := rows.Scan(&s.MailingID, &s.ClientID, &s.PhoneNumber, &s.SendTime, &s.Status, &s.Message)
+		if err != nil {
+			p.logger.LogErr(err, "failed to select")
+			return nil, err
+		}
+		stat = append(stat, s)
+	}
+
+	return stat, nil
 }
 func (p *PGStore) UpdateMailing(m *models.Mailing) error {
 	q := `UPDATE mailing SET time_start = $2, time_end = $3, code = $4, tag = $5, message = $6

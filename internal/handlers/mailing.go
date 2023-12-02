@@ -95,6 +95,12 @@ func (h *Handler) GetAllStatistic() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		if m.MailingID == 0 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte("there no one statistic success"))
+			return
+		}
 		jsonMail, err := json.Marshal(m)
 		if err != nil {
 			h.logger.LogErr(err, "")
@@ -116,7 +122,7 @@ func (h *Handler) GetDetailStatistic() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		var m models.Mailing
+		var m models.Statistics
 		if err = json.Unmarshal(content, &m); err != nil {
 			h.logger.LogErr(err, "")
 			w.WriteHeader(http.StatusInternalServerError)

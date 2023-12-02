@@ -36,13 +36,19 @@ type Message struct {
 
 type AllStatistics struct {
 	MailingID      int
-	Message        string
 	TotalMessages  int
 	SentMessages   int
 	FailedMessages int
+	Message        string
 }
 
 type Statistics struct {
+	MailingID   int       `json:"id"`
+	ClientID    int       `json:"client_id"`
+	PhoneNumber string    `json:"phone_number"`
+	Status      string    `json:"status"`
+	Message     string    `json:"message"`
+	SendTime    time.Time `json:"send_time"`
 }
 
 type ActiveMailing struct {
@@ -53,17 +59,6 @@ type ActiveMailing struct {
 	TimeSend time.Time
 	Filter   Filter
 	Client   Client
-}
-
-type ProcessMailing struct {
-	MailingId      int
-	Message        string
-	Status         string
-	MobileOperator string
-	Tag            string
-	TimeEnd        time.Time
-	TimeSend       time.Time
-	Client         []Client
 }
 
 type DeliverMailing struct {

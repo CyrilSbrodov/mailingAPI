@@ -8,7 +8,7 @@ type Storage interface {
 	DeleteClient(c *models.Client) error
 	AddMailing(m *models.Mailing) error
 	GetAllMailingStat() (models.AllStatistics, error)
-	GetOneMailingStatByID(m *models.Mailing) (models.Mailing, error)
+	GetOneMailingStatByID(m *models.Statistics) ([]models.Statistics, error)
 	UpdateMailing(m *models.Mailing) error
 	DeleteMailing(m *models.Mailing) error
 	ActiveProcessMailing() (map[string][]models.ActiveMailing, error)
