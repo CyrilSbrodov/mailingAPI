@@ -1,7 +1,10 @@
+version: '3'
+networks:
+  mailing_network:
+    driver: bridge
 services:
-  db:
+  postgres:
     image: postgres
-    container_name: postgres
     restart: always
     ports:
       - "5432:5432"
@@ -9,12 +12,19 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_USER=postgres
       - POSTGRES_DB=postgres
+    networks:
+     - mailing_network
 
   api:
     build: .
     container_name: api
     ports:
+      - "5430:5432"
       - "8080:8080"
     restart: on-failure
     depends_on:
-      - db
+      - postgres
+    env_file:
+      - .env
+    networks:
+      - mailing_network
