@@ -2,6 +2,9 @@ package handlers
 
 import (
 	"github.com/go-chi/chi/v5"
+	httpSwagger "github.com/swaggo/http-swagger"
+
+	_ "mailingAPI/docs"
 
 	"mailingAPI/cmd/config"
 	"mailingAPI/cmd/loggers"
@@ -40,5 +43,8 @@ func (h *Handler) Register(r *chi.Mux) {
 		r.Post("/api/mailing/delete", h.DeleteMailing())
 		r.Get("/api/mailing", h.GetAllStatistic())
 		r.Post("/api/mailing/get", h.GetDetailStatistic())
+		r.Get("/swagger/*", httpSwagger.Handler(
+			httpSwagger.URL("http://localhost:8080/swagger/doc.json"), //The url pointing to API definition
+		))
 	})
 }

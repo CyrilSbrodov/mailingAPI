@@ -9,6 +9,18 @@ import (
 	"mailingAPI/internal/storage/models"
 )
 
+// AddClient
+// @Summary AddClient
+// @Tags Client
+// @Description add a new client
+// @ID AddClient
+// @Accept json
+// @Produce json
+// @Param input body models.Client true "client info"
+// @Success 200 {integer} integer 1
+// @Failure 400
+// @Failure 500
+// @Router /api/client [post]
 func (h *Handler) AddClient() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		content, err := io.ReadAll(r.Body)
@@ -40,6 +52,18 @@ func (h *Handler) AddClient() http.HandlerFunc {
 	}
 }
 
+// UpdateClient
+// @Summary UpdateClient
+// @Tags Client
+// @Description update client
+// @ID UpdateClient
+// @Accept json
+// @Produce json
+// @Param input body models.Client true "update client info"
+// @Success 200 {integer} integer 1
+// @Failure 400
+// @Failure 500
+// @Router /api/client/update [post]
 func (h *Handler) UpdateClient() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		content, err := io.ReadAll(r.Body)
@@ -66,6 +90,17 @@ func (h *Handler) UpdateClient() http.HandlerFunc {
 	}
 }
 
+// DeleteClient
+// @Summary DeleteClient
+// @Tags Client
+// @Description delete client
+// @ID DeleteClient
+// @Accept json
+// @Produce json
+// @Param input body models.Client true "delete client by id"
+// @Success 200 {integer} integer 1
+// @Failure 404
+// @Router /api/client/delete [post]
 func (h *Handler) DeleteClient() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		content, err := io.ReadAll(r.Body)

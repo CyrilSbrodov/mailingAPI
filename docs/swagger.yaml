@@ -1,0 +1,264 @@
+basePath: /
+definitions:
+  models.Client:
+    properties:
+      id:
+        type: integer
+      mobile_operator:
+        type: string
+      phone_number:
+        type: string
+      tag:
+        type: string
+      time_zone:
+        type: string
+    type: object
+  models.Filter:
+    properties:
+      mobile_operator:
+        type: string
+      tag:
+        type: string
+    type: object
+  models.Mailing:
+    properties:
+      filter:
+        $ref: '#/definitions/models.Filter'
+      id:
+        type: integer
+      messages:
+        type: string
+      time_end:
+        type: string
+      time_start:
+        type: string
+    type: object
+  models.Statistics:
+    properties:
+      client_id:
+        type: integer
+      id:
+        type: integer
+      message:
+        type: string
+      phone_number:
+        type: string
+      send_time:
+        type: string
+      status:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API for mailing service
+  title: mailing API
+  version: "1.0"
+paths:
+  /api/client:
+    post:
+      consumes:
+      - application/json
+      description: add a new client
+      operationId: AddClient
+      parameters:
+      - description: client info
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.Client'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: integer
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: AddClient
+      tags:
+      - Client
+  /api/client/delete:
+    post:
+      consumes:
+      - application/json
+      description: delete client
+      operationId: DeleteClient
+      parameters:
+      - description: delete client by id
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.Client'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: integer
+        "404":
+          description: Not Found
+      summary: DeleteClient
+      tags:
+      - Client
+  /api/client/update:
+    post:
+      consumes:
+      - application/json
+      description: update client
+      operationId: UpdateClient
+      parameters:
+      - description: update client info
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.Client'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: integer
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: UpdateClient
+      tags:
+      - Client
+  /api/mailing:
+    get:
+      consumes:
+      - application/json
+      description: get all statistics
+      operationId: GetAllStatistic
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: integer
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: GetAllStatistic
+      tags:
+      - Mailing
+    post:
+      consumes:
+      - application/json
+      description: add a new mailing
+      operationId: AddMailing
+      parameters:
+      - description: add new mailing
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.Mailing'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: integer
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: AddMailing
+      tags:
+      - Mailing
+  /api/mailing/delete:
+    post:
+      consumes:
+      - application/json
+      description: delete mailing by id
+      operationId: DeleteMailing
+      parameters:
+      - description: delete mailing
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.Mailing'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: integer
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: DeleteMailing
+      tags:
+      - Mailing
+  /api/mailing/get:
+    post:
+      consumes:
+      - application/json
+      description: get detail statistics by mailing id
+      operationId: GetDetailStatistic
+      parameters:
+      - description: detail statistics
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.Statistics'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: integer
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: GetDetailStatistic
+      tags:
+      - Mailing
+  /api/mailing/update:
+    post:
+      consumes:
+      - application/json
+      description: update mailing params
+      operationId: UpdateMailing
+      parameters:
+      - description: new mailing params
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.Mailing'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: integer
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: UpdateMailing
+      tags:
+      - Mailing
+swagger: "2.0"

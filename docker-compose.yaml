@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres
+    container_name: postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=postgres
+
+  api:
+    build: .
+    container_name: api
+    ports:
+      - "8080:8080"
+    restart: on-failure
+    depends_on:
+      - db
