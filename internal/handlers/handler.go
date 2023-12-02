@@ -39,6 +39,6 @@ func (h *Handler) Register(r *chi.Mux) {
 		r.Post("/api/mailing/update", h.UpdateMailing())
 		r.Post("/api/mailing/delete", h.DeleteMailing())
 		r.Get("/api/mailing", h.GetAllStatistic())
-		r.Get("/api/mailing/get", h.GetDetailStatistic())
+		r.Post("/api/mailing/get", h.GetDetailStatistic())
 	})
 }
