@@ -78,7 +78,12 @@ func (h *Handler) UpdateClient() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		// TODO проверка полей юзера
+		if !client.CheckNumber() {
+			h.logger.LogErr(fmt.Errorf("wrong format phone number"), "")
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("wrong format phone number"))
+			return
+		}
 		if err = h.storage.UpdateClient(&client); err != nil {
 			h.logger.LogErr(err, "")
 			w.WriteHeader(http.StatusInternalServerError)

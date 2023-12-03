@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"time"
 
 	"mailingAPI/internal/storage/models"
 )
@@ -32,9 +33,10 @@ func (h *Handler) AddMailing() http.HandlerFunc {
 		if err = json.Unmarshal(content, &m); err != nil {
 			h.logger.LogErr(err, "")
 			w.WriteHeader(http.StatusInternalServerError)
+			json, _ := json.Marshal(time.Now())
+			w.Write(json)
 			return
 		}
-		// TODO проверка полей юзера
 		if err = h.storage.AddMailing(&m); err != nil {
 			h.logger.LogErr(err, "")
 			w.WriteHeader(http.StatusInternalServerError)

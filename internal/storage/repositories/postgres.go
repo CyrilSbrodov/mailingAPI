@@ -109,7 +109,7 @@ func (p *PGStore) DeleteClient(c *models.Client) error {
 }
 func (p *PGStore) AddMailing(m *models.Mailing) error {
 	q := `INSERT INTO mailing (time_start, time_end, code, tag, message)
-    						VALUES ($1, $2, $3, $4, $5, $6)`
+    						VALUES ($1, $2, $3, $4, $5)`
 	if _, err := p.client.Exec(context.Background(), q, m.TimeStart, m.TimeEnd, m.Filter.MobileOperator, m.Filter.Tag, m.Message); err != nil {
 		p.logger.LogErr(err, "Failure to insert object into table")
 		return err
